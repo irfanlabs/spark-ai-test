@@ -1,0 +1,16 @@
+{
+  "name": "spark-ai-test",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\"",
+    "dev:backend": "npm run dev --prefix backend",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "docker:up": "docker compose up --build",
+    "docker:down": "docker compose down",
+    "db:up": "docker compose up -d postgres",
+    "db:down": "docker compose stop postgres"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.1"
+  }
+}
