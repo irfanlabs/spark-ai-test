@@ -28,8 +28,8 @@ export default function DashboardPage() {
   }
 
   return (
-    <main className="mx-auto min-h-screen max-w-6xl px-4 py-6 sm:px-6">
-      <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
+    <main className="mx-auto flex h-dvh max-h-dvh max-w-6xl flex-col overflow-hidden px-4 py-4 sm:px-6 sm:py-5">
+      <header className="mb-4 flex shrink-0 flex-wrap items-center justify-between gap-3">
         <div>
           <Link href="/" className="text-xs font-semibold uppercase tracking-widest text-teal-700">
             Spark Book
@@ -51,9 +51,11 @@ export default function DashboardPage() {
         </button>
       </header>
 
-      <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
-        <ChatPanel onBooked={() => setRefreshKey((k) => k + 1)} />
-        <div className="space-y-6">
+      <div className="flex min-h-0 flex-1 flex-col gap-4 lg:grid lg:grid-cols-[1.4fr_1fr] lg:grid-rows-1 lg:gap-6">
+        <div className="flex min-h-0 flex-1 flex-col">
+          <ChatPanel onBooked={() => setRefreshKey((k) => k + 1)} />
+        </div>
+        <div className="min-h-0 max-h-[36dvh] space-y-4 overflow-y-auto pb-2 lg:max-h-none lg:space-y-6">
           <AppointmentForm onCreated={() => setRefreshKey((k) => k + 1)} />
           <AppointmentList refreshKey={refreshKey} />
         </div>

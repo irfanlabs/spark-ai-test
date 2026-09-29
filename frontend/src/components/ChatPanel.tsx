@@ -27,11 +27,22 @@ export function ChatPanel({ onBooked }: Props) {
   const [loading, setLoading] = useState(false);
   const [needsConfirmation, setNeedsConfirmation] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const messagesRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = messagesRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
+
+  useEffect(() => {
+    if (loading || !sessionId) return;
+    const frame = requestAnimationFrame(() => {
+      inputRef.current?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [loading, sessionId]);
 
   const initializedRef = useRef(false);
 
@@ -121,8 +132,8 @@ export function ChatPanel({ onBooked }: Props) {
   }
 
   return (
-    <div className="flex h-full min-h-[420px] flex-col rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-4 py-3">
         <div>
           <h2 className="text-sm font-semibold text-slate-900">Booking assistant</h2>
           <p className="text-xs text-slate-500">
@@ -140,7 +151,10 @@ export function ChatPanel({ onBooked }: Props) {
         </span>
       </div>
 
-      <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
+      <div
+        ref={messagesRef}
+        className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-4 py-4"
+      >
         {messages.length === 0 && (
           <p className="text-sm text-slate-500">
             Hi! I can help you schedule an appointment. What would you like to book?
@@ -169,11 +183,10 @@ export function ChatPanel({ onBooked }: Props) {
             </div>
           </div>
         )}
-        <div ref={bottomRef} />
       </div>
 
       {needsConfirmation && (
-        <div className="border-t border-slate-100 bg-teal-50/60 px-4 py-2">
+        <div className="shrink-0 border-t border-slate-100 bg-teal-50/60 px-4 py-2">
           <button
             type="button"
             disabled={loading}
@@ -186,14 +199,15 @@ export function ChatPanel({ onBooked }: Props) {
       )}
 
       {error && (
-        <p className="px-4 pb-2 text-xs text-red-600" role="alert">
+        <p className="shrink-0 px-4 pb-2 text-xs text-red-600" role="alert">
           {error}
         </p>
       )}
 
-      <form onSubmit={onSubmit} className="border-t border-slate-100 p-3">
+      <form onSubmit={onSubmit} className="shrink-0 border-t border-slate-100 p-3">
         <div className="flex gap-2">
           <input
+            ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Type your message…"
