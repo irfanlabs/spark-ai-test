@@ -2,15 +2,6 @@
 
 End-to-end SaaS-style prototype: **Next.js** frontend, **Express** API, **PostgreSQL**, **JWT auth**, **WebSocket + REST chat**, and **OpenRouter** LLM integration (with deterministic mock fallback).
 
-## Live demo
-
-> Deploy using the steps below (e.g. Railway/Render + Vercel) and add your URL here before submission.
-
-| Environment | URL |
-|-------------|-----|
-| Frontend    | _TBD_ |
-| API         | _TBD_ |
-
 **Demo credentials (auto-seeded on backend startup):** `demo@example.com` / `Password123!`
 
 ## Architecture
@@ -212,8 +203,6 @@ See [`database/schema.sql`](database/schema.sql).
 - Rate limits are basic (in-memory; per-instance only)
 - WebSocket auth via query token (acceptable for prototype; production would use short-lived WS tickets)
 - No automated test suite (time-boxed assessment scope)
-- Deployment URLs are placeholders until you deploy
-
 ## AI integration
 
 Set `OPENROUTER_API_KEY` in `.env` ([OpenRouter](https://openrouter.ai/)). Pick any compatible model via `OPENROUTER_MODEL`. Interactions are logged to `ai_interaction_logs` and stdout.
