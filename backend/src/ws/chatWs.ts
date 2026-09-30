@@ -2,14 +2,11 @@ import type { Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { verifyToken } from "../utils/jwt.js";
 import {
-  addMessage,
   createSession,
   getSession,
   listMessages,
-  updateSessionMetadata,
 } from "../services/chatService.js";
-import { generateAssistantReply } from "../services/aiService.js";
-import { createAppointment } from "../services/appointmentService.js";
+import { processChatTurn } from "../services/chatProcessor.js";
 
 type ClientMessage =
   | { type: "ping" }
@@ -76,79 +73,16 @@ export function attachChatWebSocket(server: Server, path = "/ws"): void {
         }
 
         if (parsed.type === "chat") {
-          const { sessionId, content, confirmBooking } = parsed;
-          const userMsg = await addMessage({
-            sessionId,
+          const result = await processChatTurn({
+            sessionId: parsed.sessionId,
             userId,
-            role: "user",
-            content,
-          });
-
-          const historyRows = await listMessages(sessionId, userId);
-          const history = historyRows
-            .filter((m) => m.id !== userMsg.id)
-            .map((m) => ({ role: m.role, content: m.content }));
-
-          const ai = await generateAssistantReply({
-            userMessage: content,
-            history,
-            sessionId,
-            userId,
-          });
-
-          let appointment = null;
-          const draft = ai.booking;
-          const readyToBook =
-            draft.intent === "book" &&
-            draft.missingFields.length === 0 &&
-            draft.startsAt &&
-            draft.endsAt &&
-            draft.title;
-
-          if (readyToBook && confirmBooking) {
-            appointment = await createAppointment({
-              userId,
-              title: draft.title!,
-              description: draft.description,
-              startsAt: new Date(draft.startsAt!),
-              endsAt: new Date(draft.endsAt!),
-              source: "chat",
-            });
-            await updateSessionMetadata(sessionId, userId, {
-              lastBookedAppointmentId: appointment.id,
-            });
-          }
-
-          let assistantContent = ai.reply;
-          if (readyToBook && !confirmBooking) {
-            assistantContent +=
-              "\n\nReply yes or tap Confirm booking when you're ready.";
-          }
-          if (appointment) {
-            assistantContent += `\n\nBooked: ${appointment.title} on ${new Date(appointment.starts_at).toLocaleString()}.`;
-          }
-
-          const assistantMsg = await addMessage({
-            sessionId,
-            userId,
-            role: "assistant",
-            content: assistantContent,
-            metadata: {
-              booking: draft,
-              appointmentId: appointment?.id ?? null,
-              provider: ai.usedProvider,
-            },
+            content: parsed.content,
+            confirmBooking: parsed.confirmBooking,
           });
 
           send(ws, {
             type: "chat_result",
-            payload: {
-              userMessage: userMsg,
-              assistantMessage: assistantMsg,
-              booking: draft,
-              appointment,
-              needsConfirmation: Boolean(readyToBook && !confirmBooking),
-            },
+            payload: result,
           });
         }
       } catch (err) {

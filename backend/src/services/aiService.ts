@@ -17,28 +17,42 @@ export type AiChatResult = {
   usedProvider: "openrouter" | "mock";
 };
 
-const SYSTEM_PROMPT = `You are an appointment booking assistant for a health clinic SaaS app.
-Help users schedule appointments. Extract structured booking data from the conversation.
+function buildSystemPrompt(context: {
+  nowIso: string;
+  pendingBooking?: { title: string; startsAt: string; endsAt: string } | null;
+}): string {
+  const pendingLine = context.pendingBooking
+    ? `Pending booking awaiting user confirmation: ${JSON.stringify(context.pendingBooking)}. Do not change these times unless the user asks to modify them.`
+    : "No pending booking awaiting confirmation.";
 
-Always respond with valid JSON only (no markdown), in this shape:
+  return `You are an appointment booking assistant for a health clinic SaaS app ONLY.
+You must NOT answer general knowledge, celebrities, news, politics, or any topic unrelated to scheduling.
+
+Current UTC date/time: ${context.nowIso}
+${pendingLine}
+
+Always respond with valid JSON only (no markdown):
 {
-  "reply": "friendly message to the user",
+  "reply": "message to the user",
   "booking": {
     "intent": "book" | "question" | "unknown",
-    "title": "optional appointment title",
+    "title": "string or omit",
     "description": "optional notes",
-    "startsAt": "ISO 8601 datetime if known",
-    "endsAt": "ISO 8601 datetime if known",
-    "missingFields": ["list of missing required fields: title, startsAt, endsAt"],
+    "startsAt": "ISO 8601 UTC datetime when confirmed",
+    "endsAt": "ISO 8601 UTC datetime when confirmed",
+    "missingFields": ["any of: title, startsAt, endsAt, timezone"],
     "confidence": 0.0 to 1.0
   }
 }
 
 Rules:
-- Required to book: title (or infer e.g. "Consultation"), startsAt, endsAt (default 30 min after startsAt if duration mentioned).
-- Use the user's timezone context from messages when possible; if ambiguous, ask in reply and list missingFields.
-- If user asks general questions, set intent to question and answer briefly.
-- Never invent confirmed bookings in reply; say you will book once details are complete.`;
+- Scope: booking, rescheduling, cancelling, clinic scheduling questions only. For anything else, set intent to "unknown" and redirect to booking in reply. Never answer off-topic questions.
+- Required before intent "book" with empty missingFields: title, startsAt, endsAt, timezone (IANA e.g. Asia/Karachi, or explicit UTC offset). If user gives local time without timezone, ask which timezone and include "timezone" in missingFields.
+- Interpret dates relative to current UTC date above (year ${context.nowIso.slice(0, 4)} unless user specifies another).
+- Default duration 30 minutes if user gives start time + duration only.
+- Do NOT say an appointment is confirmed/booked in reply; the server confirms after the user says yes.
+- For clinic-only "question" intent (hours, location), answer briefly then steer back to booking.`;
+}
 
 function aiProviderLabel(): string {
   return env.openRouterApiKey ? "openrouter" : "mock";
@@ -94,9 +108,22 @@ function mockAssistant(
   history: { role: string; content: string }[]
 ): AiChatResult {
   const lower = userMessage.toLowerCase();
+  if (/\b(who is|what is|elon|musk|tell me about)\b/i.test(userMessage)) {
+    return {
+      reply:
+        "I can only help with appointment booking at this clinic. What date, time (with timezone), and visit title would you like?",
+      booking: {
+        intent: "unknown",
+        missingFields: ["title", "startsAt", "endsAt", "timezone"],
+        confidence: 1,
+      },
+      usedProvider: "mock",
+    };
+  }
+
   const booking: ExtractedBooking = {
     intent: "unknown",
-    missingFields: ["title", "startsAt", "endsAt"],
+    missingFields: ["title", "startsAt", "endsAt", "timezone"],
     confidence: 0.5,
   };
 
@@ -134,6 +161,7 @@ function mockAssistant(
 }
 
 async function callOpenRouter(
+  systemPrompt: string,
   messages: { role: string; content: string }[]
 ): Promise<string> {
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -146,7 +174,7 @@ async function callOpenRouter(
     },
     body: JSON.stringify({
       model: env.openRouterModel,
-      messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
+      messages: [{ role: "system", content: systemPrompt }, ...messages],
       temperature: 0.3,
       response_format: { type: "json_object" },
     }),
@@ -170,11 +198,17 @@ export async function generateAssistantReply(input: {
   history: { role: string; content: string }[];
   sessionId?: string;
   userId?: string;
+  pendingBooking?: { title: string; startsAt: string; endsAt: string } | null;
 }): Promise<AiChatResult> {
   const messages = [
     ...input.history.slice(-12),
     { role: "user", content: input.userMessage },
   ];
+
+  const systemPrompt = buildSystemPrompt({
+    nowIso: new Date().toISOString(),
+    pendingBooking: input.pendingBooking ?? null,
+  });
 
   const start = Date.now();
   if (!env.openRouterApiKey) {
@@ -190,7 +224,7 @@ export async function generateAssistantReply(input: {
   }
 
   try {
-    const raw = await callOpenRouter(messages);
+    const raw = await callOpenRouter(systemPrompt, messages);
     const parsed = parseAiJson(raw);
     const result: AiChatResult = {
       ...parsed,
